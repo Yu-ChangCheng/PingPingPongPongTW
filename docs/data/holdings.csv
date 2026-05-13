@@ -1,0 +1,4 @@
+ticker,shares,entry_price,current_price,market_value,unrealized_pnl,unrealized_pct,stop_loss_price,days_held,time_stop_left,decision
+2303.TW,10,96.0,98.4000015258789,984.0000152587891,24.000015258789062,0.025000015894572014,88.32000000000001,0,10,HOLD (rotate when basket changes)
+2408.TW,3,310.0,310.0,930.0,0.0,0.0,285.2,0,10,HOLD (rotate when basket changes)
+3037.TW,1,876.0,892.0,892.0,16.0,0.0182648401826484,805.9200000000001,0,10,HOLD (rotate when basket changes)
