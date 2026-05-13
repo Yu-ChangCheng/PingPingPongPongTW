@@ -1,6 +1,6 @@
 action,ticker,shares,limit_price,notional,rationale
-BUY,1303.TW,224,89.1,19958.4,OPEN long position (entered top-N basket)
-BUY,3037.TW,22,875.0,19250.0,OPEN long position (entered top-N basket)
-BUY,3443.TW,3,5570.0,16710.0,OPEN long position (entered top-N basket)
-BUY,3665.TW,7,2775.0,19425.0,OPEN long position (entered top-N basket)
-BUY,6415.TW,41,476.5,19536.5,OPEN long position (entered top-N basket)
+BUY,HOOD,259,77.11,19971.49,OPEN long position (entered top-N basket)
+BUY,INTC,164,121.53,19930.94,OPEN long position (entered top-N basket)
+BUY,ORCL,106,188.64,19995.84,OPEN long position (entered top-N basket)
+BUY,POET,1426,14.02,19992.66,OPEN long position (entered top-N basket)
+BUY,SMR,1629,12.27,19995.97,OPEN long position (entered top-N basket)
