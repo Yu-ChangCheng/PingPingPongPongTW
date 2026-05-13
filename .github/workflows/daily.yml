@@ -25,7 +25,7 @@ concurrency:
 jobs:
   predict:
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # S&P 500 + yfinance can be slow on cold cache
+    timeout-minutes: 35   # Taiwan 50 + 0050 — faster than full S&P 500
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -51,7 +51,7 @@ jobs:
           LIVE_PORTFOLIO_START: ${{ vars.LIVE_PORTFOLIO_START }}
           # Optional: simulated starting bankroll (same units as prices, e.g. NTD for .TW).
           STARTING_CAPITAL: ${{ vars.STARTING_CAPITAL }}
-          # Optional: `core` = 54-stock sleeve (faster). Default / empty = S&P 500 CSV.
+          # Optional: `tw` (default Taiwan 50), `sp500`, or `core` (US mega-cap sleeve).
           UNIVERSE: ${{ vars.UNIVERSE }}
         run: python scripts/run_daily.py
 

@@ -1,6 +1,6 @@
 # RF daily stock signals — panel model + static dashboard
 
-Train a **Random Forest** on a **daily cross-section** of US stocks, score every name for **next-day excess return**, and ship a **self-contained report** under `docs/` (works with **GitHub Pages**).
+Train a **Random Forest** on a **daily cross-section** of **Taiwan-listed** stocks (default: bundled Taiwan 50–style universe), score every name for **next-day excess return vs `0050.TW`**, and ship a **self-contained report** under `docs/` (works with **GitHub Pages**).
 
 **Educational only — not investment advice.**
 
@@ -133,8 +133,8 @@ Limit sell overlays in the **table** are **reference only** — the simulator ro
 
 | Piece | Details |
 |-------|---------|
-| **Core list** | Tickers from **`pipeline/sp500_constituents.csv`** plus index ETFs (**SPY**, **QQQ**) by default. |
-| **Smaller sleeve** | **`UNIVERSE=core`** — fixed **~60** names in **`pipeline/universe.py`** (54 mega-cap sleeve **+** HOOD, SOFI, POET, SMR, PWR, PLTR). Same pipeline, **much smaller** cross-section than full S&P, so top-5 picks stay in that familiar set. Set **`UNIVERSE=core`** locally or as a GitHub **Actions variable** if you want this on the site instead of ~500 names. |
+| **Core list** | Default **`UNIVERSE=tw`**: **`pipeline/taiwan50_constituents.csv`** (`.TW` symbols) + **`0050.TW`** benchmark. Use **`UNIVERSE=sp500`** for the bundled S&P CSV, or **`UNIVERSE=core`** for the US mega-cap sleeve. |
+| **Smaller sleeve** | **`UNIVERSE=core`** — fixed **~60** US names in **`pipeline/universe.py`**. **`UNIVERSE=sp500`** uses **`pipeline/sp500_constituents.csv`**. |
 | **Refresh S&P names** | `python scripts/refresh_sp500.py` |
 | **Hot watchlist** | If **`enable_hot_stocks`** is on, a momentum/volume screen can add up to **`hot_max_to_add`** extra tickers **for that run only** (see **`pipeline/hotstocks.py`**). |
 
@@ -148,7 +148,8 @@ Edit **`pipeline/config.py`** (or override with environment variables where note
 - **`cost_bps_per_side`** — model / panel cost; the live sim in `run_daily.py` uses **`0` bps** (treat as manual, zero-commission execution).  
 - **`starting_capital`** — default **100,000** (same units as your prices, e.g. **NTD** for `.TW`). Override with **`STARTING_CAPITAL`** (env or GitHub Actions variable **`STARTING_CAPITAL`**).  
 - **`currency_prefix`** — default **`NT$`** for labels in **`docs/index.html`**.  
-- **`enable_hot_stocks`**, **`hot_max_to_add`**, **`hot_min_score`** — hot-list behaviour.  
+- **`indices`** / **`benchmark`** — default **`0050.TW`** (Yuanta Taiwan 50 ETF): same trading calendar as Taiwan listings for excess returns and realised **`actual_xret`**. For a US-only universe, set **`benchmark`** to **`SPY`** (or similar) and include that ticker in **`indices`** in **`pipeline/config.py`**.  
+- **`enable_hot_stocks`** — off by default (avoids scanning the US-heavy watchlist). Turn on in **`pipeline/config.py`** if you add a Taiwan-only watchlist later.  
 - **`live_portfolio_start`** — when the persisted live book starts trading.  
 
 ---
@@ -158,6 +159,9 @@ Edit **`pipeline/config.py`** (or override with environment variables where note
 ```
 scripts/run_daily.py       # Main entry: download → features → model → portfolio → site
 pipeline/config.py         # Defaults and knobs
+pipeline/taiwan50_constituents.csv   # Default Taiwan universe (edit / replace)
+pipeline/sp500_constituents.csv      # Used when UNIVERSE=sp500
+pipeline/universe.py       # Universe loaders (tw / sp500 / core)
 pipeline/features.py       # Signals + cross-sectional ranks
 pipeline/model.py          # Walk-forward + full-history fit
 pipeline/portfolio.py      # Simulation, orders, daily_views

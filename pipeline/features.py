@@ -29,7 +29,7 @@ def _lagged_window_return(s: pd.Series, total: int, skip: int) -> pd.Series:
 
 
 def build_panel(prices: pd.DataFrame, sectors: dict[str, str],
-                benchmark: str = "SPY") -> pd.DataFrame:
+                benchmark: str = "0050.TW") -> pd.DataFrame:
     """Per-ticker feature engineering. Returns a long panel (date, ticker, features...)."""
     need = {"date", "ticker", "open", "high", "low", "close", "adj_close", "volume"}
     miss = need - set(prices.columns)
@@ -37,7 +37,8 @@ def build_panel(prices: pd.DataFrame, sectors: dict[str, str],
         raise ValueError(f"prices missing columns {sorted(miss)} — got {list(prices.columns)}")
     if benchmark not in prices["ticker"].values:
         raise ValueError(
-            f"benchmark {benchmark!r} not in price panel — need SPY (and peers) downloaded.")
+            f"benchmark {benchmark!r} not in price panel — add it to `Config.indices` "
+            f"and ensure prices were downloaded (e.g. 0050.TW for Taiwan).")
 
     df = prices.copy()
     df["adj_close"] = df["adj_close"].astype(float)

@@ -631,10 +631,24 @@ def _recent_predictions_table(history: pd.DataFrame, n: int = 20) -> str:
     recent = history.dropna(subset=["actual_ret"]).copy()
     if recent.empty:
         return '<p><i>No realised predictions yet.</i></p>'
-    recent["pred_pct"]   = recent["pred_xret"].map(lambda v: f"{v*100:+.2f}%")
-    recent["actual_pct"] = recent["actual_xret"].map(lambda v: f"{v*100:+.2f}%")
-    recent["correct"] = (((recent["side"] == "long")  & (recent["actual_xret"] > 0))
-                          | ((recent["side"] == "short") & (recent["actual_xret"] < 0)))
+    # Prefer excess vs benchmark; fall back to total return when bench was NaN
+    # (e.g. rare calendar gaps vs the benchmark ticker in the panel).
+    ax = recent["actual_xret"].where(recent["actual_xret"].notna(),
+                                     recent["actual_ret"])
+    recent = recent.assign(_ax=ax)
+    recent["pred_pct"] = recent["pred_xret"].map(lambda v: f"{v*100:+.2f}%")
+
+    def _fmt_act(r) -> str:
+        x, t = r["actual_xret"], r["actual_ret"]
+        if pd.notna(x) and np.isfinite(float(x)):
+            return f"{float(x)*100:+.2f}%"
+        if pd.notna(t) and np.isfinite(float(t)):
+            return f"{float(t)*100:+.2f}% <span style='color:#888'>(total)</span>"
+        return "n/a"
+
+    recent["actual_pct"] = recent.apply(_fmt_act, axis=1)
+    recent["correct"] = (((recent["side"] == "long")  & (recent["_ax"] > 0))
+                          | ((recent["side"] == "short") & (recent["_ax"] < 0)))
     recent = (recent[recent["side"].isin(["long", "short"])]
               .sort_values("for_date", ascending=False).head(n))
     head = ("<tr><th>For date</th><th>Side</th><th>Ticker</th>"
@@ -948,7 +962,7 @@ def build_site(latest_predictions: pd.DataFrame,
     Updated <b>{run_at.strftime('%Y-%m-%d %H:%M UTC')}</b> &middot;
     based on close prices through <b>{today.strftime('%Y-%m-%d')}</b> &middot;
     targeting <b>next trading day</b> &middot;
-    {len(cfg.universe)} core stocks + {len(cfg.indices)} indices &middot;
+    {len(cfg.universe)} universe stocks + {len(cfg.indices)} indices &middot;
     starting capital <b>{capital_str}</b> &middot;
     live settlement <b>{("T+1 cash" if active_settle_mode == "cash" else "T+0 margin")}</b>
     <span style="color:#888">· backtest toggle below · rerun with <code>SETTLE_DAYS=1</code> for T+1 live</span>

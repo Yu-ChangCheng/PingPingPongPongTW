@@ -1,9 +1,10 @@
-"""S&P 500 constituents + small optional core list.
+"""Universe bundles: Taiwan 50 (default), S&P 500 CSV, or US core sleeve.
 
-Ticker symbols use **Yahoo Finance** conventions (hyphen, e.g. ``BRK-B``).
+- **Taiwan** (default): ``taiwan50_constituents.csv`` — Yahoo symbols ``####.TW``.
+- **US S&P**: ``sp500_constituents.csv`` from Wikipedia (hyphen, e.g. ``BRK-B``).
+- **US core**: fixed mega-cap list in this module.
 
-Bundled CSV ``sp500_constituents.csv`` is generated from Wikipedia’s S&P list
-(Symbol + GICS Sector). Refresh with::
+Refresh S&P CSV with::
 
     python -m pipeline.refresh_sp500
 """
@@ -17,6 +18,7 @@ import pandas as pd
 import urllib.request
 
 SP500_CONSTITUENTS_CSV = Path(__file__).resolve().parent / "sp500_constituents.csv"
+TW50_CONSTITUENTS_CSV = Path(__file__).resolve().parent / "taiwan50_constituents.csv"
 
 # Legacy 54-name liquid sleeve (offline-friendly).
 CORE_UNIVERSE: tuple[str, ...] = (
@@ -48,10 +50,27 @@ CORE_SECTOR_MAP: dict[str, str] = {
     "SMR": "Energy", "PWR": "Indus",
 }
 
-INDEX_SECTOR_LABELS: dict[str, str] = {"SPY": "Index", "QQQ": "Index"}
+INDEX_SECTOR_LABELS: dict[str, str] = {
+    "0050.TW": "Index",
+    "SPY": "Index",
+    "QQQ": "Index",
+}
 
 _WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 _UA_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; edu-research/1.0; +https://github.com)"}
+
+
+def read_taiwan50_from_csv(path: Path | None = None) -> tuple[tuple[str, ...], dict[str, str]]:
+    """Load Taiwan large-cap universe (bundled CSV: Symbol + sector)."""
+    path = path or TW50_CONSTITUENTS_CSV
+    if not path.exists():
+        raise FileNotFoundError(f"Missing Taiwan universe CSV: {path}")
+    df = pd.read_csv(path)
+    sym = df["Symbol"].astype(str).str.strip()
+    sector_col = "GICS Sector" if "GICS Sector" in df.columns else df.columns[-1]
+    sectors = dict(zip(sym, df[sector_col].astype(str)))
+    tickers = tuple(sorted(sym.unique()))
+    return tickers, sectors
 
 
 def read_sp500_from_csv(path: Path | None = None) -> tuple[tuple[str, ...], dict[str, str]]:
@@ -83,11 +102,13 @@ def download_sp500_to_csv(save_path: Path | None = None) -> tuple[tuple[str, ...
 
 
 def load_universe(
-    mode: Literal["sp500", "core"],
+    mode: Literal["sp500", "core", "tw"],
     *,
     refresh_sp500_csv: bool = False,
 ) -> tuple[tuple[str, ...], dict[str, str]]:
     """Return (tickers tuple, ticker->sector mapping) excluding indices."""
+    if mode == "tw":
+        return read_taiwan50_from_csv()
     if mode == "core":
         return CORE_UNIVERSE, dict(CORE_SECTOR_MAP)
     if refresh_sp500_csv:
@@ -95,9 +116,9 @@ def load_universe(
     return read_sp500_from_csv()
 
 
-def default_universe_bundle(mode: Literal["sp500", "core"] = "sp500",
+def default_universe_bundle(mode: Literal["sp500", "core", "tw"] = "tw",
                             ) -> tuple[tuple[str, ...], dict[str, str]]:
-    """Used by ``Config``: ``sp500`` reads bundled CSV; ``core`` is the 54-name list."""
+    """Used by ``Config``: ``tw`` = Taiwan 50 CSV; ``sp500`` / ``core`` = US sleeves."""
     tickers, sec = load_universe(mode)
     merged = dict(sec)
     merged.update({k: v for k, v in INDEX_SECTOR_LABELS.items()})

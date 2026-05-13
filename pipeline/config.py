@@ -21,15 +21,17 @@ def _parse_starting_capital() -> float:
 
 
 # Resolve once at import so `Config()` matches one bundle. Override with
-# `UNIVERSE=core` for the legacy 54-stock sleeve (faster CI / smoke tests).
-_um = os.environ.get("UNIVERSE", "sp500").strip().lower()
-if _um not in ("sp500", "core"):
-    _um = "sp500"
-DEFAULT_UNIVERSE_MODE: Literal["sp500", "core"] = _um  # type: ignore[assignment]
-_DEFAULT_UNIVERSE, _DEFAULT_SECTORS = default_universe_bundle(
-    "core" if _um == "core" else "sp500")
+# `UNIVERSE=sp500` (S&P CSV), `UNIVERSE=core` (US mega-cap sleeve), or default `tw` / `UNIVERSE=tw` (Taiwan 50 CSV).
+_um = os.environ.get("UNIVERSE", "tw").strip().lower()
+if _um not in ("sp500", "core", "tw"):
+    _um = "tw"
+DEFAULT_UNIVERSE_MODE: Literal["sp500", "core", "tw"] = _um  # type: ignore[assignment]
+_bundle: Literal["sp500", "core", "tw"] = (
+    "core" if _um == "core" else ("tw" if _um == "tw" else "sp500"))
+_DEFAULT_UNIVERSE, _DEFAULT_SECTORS = default_universe_bundle(_bundle)
 
-DEFAULT_INDICES: tuple[str, ...] = ("SPY", "QQQ")
+# Taiwan 50 ETF — same listing calendar as `.TW` stocks (unlike US SPY/QQQ).
+DEFAULT_INDICES: tuple[str, ...] = ("0050.TW",)
 
 
 @dataclass
@@ -40,7 +42,8 @@ class Config:
     universe: tuple[str, ...] = field(default_factory=lambda: tuple(_DEFAULT_UNIVERSE))
     indices: tuple[str, ...] = DEFAULT_INDICES
     sectors: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_SECTORS))
-    benchmark: str = "SPY"
+    # Excess returns vs this ticker’s same-day return (must be in `indices` + downloaded).
+    benchmark: str = "0050.TW"
 
     train_years: int = 5
     val_years: int = 1
@@ -67,7 +70,7 @@ class Config:
     # Override anytime with env `LIVE_PORTFOLIO_START=YYYY-MM-DD`.
     live_portfolio_start: str | None = "2026-05-13"
 
-    enable_hot_stocks: bool = True
+    enable_hot_stocks: bool = False
     hot_watchlist: tuple[str, ...] = ()   # empty -> use DEFAULT_WATCHLIST
     hot_max_to_add: int = 10
     hot_min_score: float = 1.0

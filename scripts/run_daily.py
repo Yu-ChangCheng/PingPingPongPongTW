@@ -67,7 +67,7 @@ def main(refresh: bool = True) -> None:
     cfg = DEFAULT_CONFIG
     print(f"[{datetime.now().isoformat(timespec='seconds')}] Starting daily run")
     print(f"  universe = {len(cfg.universe)} stocks + {len(cfg.indices)} indices "
-          f"(UNIVERSE={DEFAULT_UNIVERSE_MODE}; set UNIVERSE=core for legacy 54-stock sleeve)")
+          f"(UNIVERSE={DEFAULT_UNIVERSE_MODE}; tw=Taiwan 50 CSV, sp500=S&P CSV, core=US mega-cap sleeve)")
 
     print("Step 1/6: download core prices...")
     prices = download_prices(cfg.all_tickers, cfg.start, cfg.end,

@@ -112,6 +112,11 @@ def update_tracker(predictions_today: pd.DataFrame,
     merged.loc[fill_mask, "actual_ret"]  = merged.loc[fill_mask, "_ret"]
     merged.loc[fill_mask, "actual_xret"] = (merged.loc[fill_mask, "_ret"]
                                             - merged.loc[fill_mask, "_ret_bench"])
+    # Benchmark `ret_bench` is merged by *calendar* date. If the bench ticker has
+    # no bar on a session (rare with 0050.TW on TW dates), `_ret_bench` can be NaN
+    # while `_ret` exists. For display / hit-rate, treat excess as total return that day.
+    xmiss = merged["actual_ret"].notna() & merged["actual_xret"].isna()
+    merged.loc[xmiss, "actual_xret"] = merged.loc[xmiss, "actual_ret"]
     history = merged.drop(columns=["_ret", "_ret_bench"])
 
     history = history.sort_values(["for_date", "rank"]).reset_index(drop=True)
