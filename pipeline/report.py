@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -65,6 +66,7 @@ def _today_predictions_table(latest: pd.DataFrame, panel: pd.DataFrame,
     """Rich HTML table: top-N (BUY) and bottom-N (AVOID) with full execution
     plan (entry price, shares, take-profit limit, stop-loss, default exit)."""
     last_date = pd.to_datetime(panel["date"].max())
+    as_of = last_date.strftime("%Y-%m-%d")
     last_prices = (panel[pd.to_datetime(panel["date"]) == last_date]
                     .set_index("ticker")["adj_close"])
     df = latest.copy()
@@ -86,7 +88,8 @@ def _today_predictions_table(latest: pd.DataFrame, panel: pd.DataFrame,
         '<th title="BUY basket vs AVOID">Side</th>'
         "<th>#</th><th>Ticker</th>"
         '<th title="Predicted next-day excess vs benchmark">Pred xret</th>'
-        '<th title="Last adj. close: buy-limit anchor + share sizing">Close</th>'
+        f'<th title="Adjusted close on {as_of} (last date row in this run&apos;s price panel)">'
+        f'Close<br><span style="font-size:10px;color:#666;font-weight:400">as of {as_of}</span></th>'
         f'<th title="Shares \u2248 portfolio\u00f7{long_n}\u00f7close (~{starting_capital:,.0f} fresh)">Sh</th>'
         '<th title="Optional take-profit (simulator does not use this)">Lim. sell</th>'
         f'<th title="Reference stop \u2212{stop_pct_ui}% vs close; holdings use your fill">Stop</th>'
@@ -945,6 +948,9 @@ def build_site(latest_predictions: pd.DataFrame,
 
     long_n_str = f"{long_n}"
 
+    run_tw = run_at.astimezone(ZoneInfo("Asia/Taipei"))
+    tw_stamp = run_tw.strftime("%Y-%m-%d %H:%M Asia/Taipei")
+
     html = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -959,7 +965,7 @@ def build_site(latest_predictions: pd.DataFrame,
 
   <h1>Daily Random Forest Stock Signal</h1>
   <div class="meta">
-    Updated <b>{run_at.strftime('%Y-%m-%d %H:%M UTC')}</b> &middot;
+    Updated <b>{run_at.strftime('%Y-%m-%d %H:%M UTC')}</b> (<b>{tw_stamp}</b>) &middot;
     based on close prices through <b>{today.strftime('%Y-%m-%d')}</b> &middot;
     targeting <b>next trading day</b> &middot;
     {len(cfg.universe)} universe stocks + {len(cfg.indices)} indices &middot;
@@ -1031,7 +1037,7 @@ def build_site(latest_predictions: pd.DataFrame,
     <div class="callout">
       <strong>Columns</strong>
       <ul>
-        <li><strong>Close</strong> — adj. last session from this run (not streaming); sizing + limit-buy anchor.</li>
+        <li><strong>Close</strong> — adj. close on <b>{today.strftime('%Y-%m-%d')}</b> (last panel date in this run; if that is not &quot;today&quot; in Taipei, Yahoo data or cache is still one session behind — clear <code>data_cache/</code> and re-run).</li>
         <li><strong>Lim. sell</strong> — optional <span style="white-space:nowrap">close \u00d7 (1 + pred)</span>; simulator ignores it.</li>
         <li><strong>Stop</strong> — reference −{int(round(stop_loss_pct * 100))}% vs anchor; <strong>Current holdings</strong> uses your fill.</li>
         <li><strong>Exit</strong> — ~one session; rotate at next close if neither limit nor stop hits.</li>

@@ -44,6 +44,8 @@ jobs:
       - name: Clear price cache
         run: rm -rf data_cache
 
+      # If Yahoo lags, run_daily exits 0 and skips work (no commit). Locally omit
+      # --exit-zero-if-eod-not-ready to fail fast (exit 2) when data is not ready.
       - name: Run daily prediction
         env:
           # Optional: override `pipeline.config.Config.live_portfolio_start` (ISO date).
@@ -53,7 +55,10 @@ jobs:
           STARTING_CAPITAL: ${{ vars.STARTING_CAPITAL }}
           # Optional: `tw` (default Taiwan 50), `sp500`, or `core` (US mega-cap sleeve).
           UNIVERSE: ${{ vars.UNIVERSE }}
-        run: python scripts/run_daily.py
+          # Optional: freeze OHLCV through this session (e.g. first GitHub publish as-of 5/13
+          # while 5/14 is still open). Unset for normal "through latest Yahoo bar" runs.
+          DATA_AS_OF: ${{ vars.DATA_AS_OF }}
+        run: python scripts/run_daily.py --exit-zero-if-eod-not-ready
 
       - name: Commit updated artifacts
         run: |

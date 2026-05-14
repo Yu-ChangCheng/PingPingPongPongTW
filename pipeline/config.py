@@ -20,6 +20,12 @@ def _parse_starting_capital() -> float:
     return 100_000.0
 
 
+def _parse_data_as_of() -> str | None:
+    """Optional ISO date: clip OHLCV to this session for reproducible / as-of runs."""
+    raw = os.environ.get("DATA_AS_OF", "").strip()
+    return raw or None
+
+
 # Resolve once at import so `Config()` matches one bundle. Override with
 # `UNIVERSE=sp500` (S&P CSV), `UNIVERSE=core` (US mega-cap sleeve), or default `tw` / `UNIVERSE=tw` (Taiwan 50 CSV).
 _um = os.environ.get("UNIVERSE", "tw").strip().lower()
@@ -69,6 +75,11 @@ class Config:
     # until the model's latest prediction date is >= this day (ISO).
     # Override anytime with env `LIVE_PORTFOLIO_START=YYYY-MM-DD`.
     live_portfolio_start: str | None = "2026-05-13"
+
+    # Optional ISO date (env ``DATA_AS_OF``): drop all price rows after this
+    # session so the model matches an as-of EOD snapshot (next session still
+    # "unknown" — good for publishing a first-day forecast before that day closes).
+    data_as_of: str | None = field(default_factory=_parse_data_as_of)
 
     enable_hot_stocks: bool = False
     hot_watchlist: tuple[str, ...] = ()   # empty -> use DEFAULT_WATCHLIST

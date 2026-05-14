@@ -1,21 +1,27 @@
 """Daily entry point.
 
 Pipeline order:
-  1. Download daily OHLCV (cached) for the configured universe.
-  2. Detect *hot stocks* from the broader watchlist and download their history.
-  3. Build the panel + cross-sectional ranks (rank-normalized features).
-  4. Walk-forward Random Forest training (diagnostics).
-  5. Fit a fresh RF on ALL history -> today's predictions for tomorrow.
-  6. Run the chosen entry/exit strategy and update the simulated-trading tracker.
-  7. Render docs/index.html for GitHub Pages.
+  1. (Optional) Probe Yahoo for the latest daily bar vs expected TWSE/NYSE session.
+  2. Download daily OHLCV (cached) for the configured universe.
+  3. Detect *hot stocks* from the broader watchlist and download their history.
+  4. Build the panel + cross-sectional ranks (rank-normalized features).
+  5. Walk-forward Random Forest training (diagnostics).
+  6. Fit a fresh RF on ALL history -> today's predictions for tomorrow.
+  7. Run the chosen entry/exit strategy and update the simulated-trading tracker.
+  8. Render docs/index.html for GitHub Pages.
 
 Run locally:
     python scripts/run_daily.py
+    python scripts/run_daily.py --data-as-of 2026-05-13   # freeze EOD snapshot (env DATA_AS_OF)
+    python scripts/run_daily.py --exit-zero-if-eod-not-ready   # CI: skip if Yahoo lags
+    python scripts/check_eod_data.py                            # probe only
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +34,9 @@ if str(ROOT) not in sys.path:
 from pipeline import (FEATURE_COLS, build_panel,
                       cross_section_rank, download_prices)
 from pipeline.config import DEFAULT_CONFIG, DEFAULT_UNIVERSE_MODE
+from pipeline.data import (clip_prices_to_as_of, ffill_index_missing_sessions,
+                             validate_prices_cover_as_of)
+from pipeline.eod_ready import assess_eod_readiness
 from pipeline.hotstocks import (DEFAULT_WATCHLIST, HotConfig,
                                   score_hot_stocks, select_hot_additions)
 from pipeline.model import fit_full_model, predict_latest, walk_forward_rf
@@ -63,19 +72,49 @@ def detect_hot_additions(cfg) -> tuple[list[str], pd.DataFrame]:
     return additions, scored
 
 
-def main(refresh: bool = True) -> None:
-    cfg = DEFAULT_CONFIG
+def main(
+    refresh: bool = True,
+    *,
+    skip_eod_check: bool = False,
+    exit_zero_if_eod_not_ready: bool = False,
+    data_as_of: str | None = None,
+) -> None:
+    cfg = replace(DEFAULT_CONFIG, sectors=dict(DEFAULT_CONFIG.sectors))
+    if data_as_of is not None:
+        d = data_as_of.strip()
+        cfg = replace(cfg, data_as_of=d if d else None)
+
     print(f"[{datetime.now().isoformat(timespec='seconds')}] Starting daily run")
     print(f"  universe = {len(cfg.universe)} stocks + {len(cfg.indices)} indices "
           f"(UNIVERSE={DEFAULT_UNIVERSE_MODE}; tw=Taiwan 50 CSV, sp500=S&P CSV, core=US mega-cap sleeve)")
+    if cfg.data_as_of:
+        print(f"  DATA_AS_OF={cfg.data_as_of} (prices clipped to this session; "
+              f"prediction targets the next open/close)")
 
-    print("Step 1/6: download core prices...")
+    if not skip_eod_check:
+        print("Step 1/8: EOD data readiness (Yahoo probe)...")
+        eod = assess_eod_readiness(cfg, refresh=refresh)
+        print(eod.message)
+        if not eod.ready:
+            if exit_zero_if_eod_not_ready or os.environ.get(
+                "EOD_EXIT_ZERO_IF_NOT_READY", ""
+            ).strip().lower() in ("1", "true", "yes"):
+                print("EOD_NOT_READY: skipping full pipeline (exit 0).")
+                sys.exit(0)
+            print("EOD_NOT_READY: aborting (use --skip-eod-check or "
+                  "--exit-zero-if-eod-not-ready / EOD_EXIT_ZERO_IF_NOT_READY=1).",
+                  file=sys.stderr)
+            sys.exit(2)
+    else:
+        print("Step 1/8: EOD data readiness -- skipped (--skip-eod-check)")
+
+    print("Step 2/8: download core prices...")
     prices = download_prices(cfg.all_tickers, cfg.start, cfg.end,
                              cfg.cache_dir, refresh=refresh)
     print(f"  loaded {len(prices):,} rows | {prices['date'].min().date()} -> "
           f"{prices['date'].max().date()}")
 
-    print("Step 2/6: scan for hot stocks...")
+    print("Step 3/8: scan for hot stocks...")
     hot_additions, hot_scored = detect_hot_additions(cfg)
     if hot_additions:
         print(f"  adding hot movers: {hot_additions}")
@@ -96,7 +135,22 @@ def main(refresh: bool = True) -> None:
 
     extended_universe = tuple(sorted(set(cfg.universe + tuple(hot_additions))))
 
-    print("Step 3/6: build features...")
+    if cfg.data_as_of:
+        prices = clip_prices_to_as_of(prices, cfg.data_as_of)
+        n0 = len(prices)
+        prices = ffill_index_missing_sessions(prices, cfg.indices)
+        n1 = len(prices)
+        if n1 > n0:
+            print(f"  ffill index sessions: +{n1 - n0} synthetic row(s) for "
+                  f"{', '.join(cfg.indices)} (Yahoo calendar gaps vs stocks)")
+        must = tuple(sorted(set(cfg.all_tickers + tuple(hot_additions))))
+        validate_prices_cover_as_of(prices, cfg.data_as_of, must)
+        print(f"  clipped to DATA_AS_OF={cfg.data_as_of} | "
+              f"{prices['date'].min().date()} -> {prices['date'].max().date()}")
+    else:
+        prices = ffill_index_missing_sessions(prices, cfg.indices)
+
+    print("Step 4/8: build features...")
     panel = build_panel(prices, cfg.sectors, cfg.benchmark)
 
     clean = panel.dropna(subset=FEATURE_COLS + ["ret_fwd_1d", "xret_fwd_1d"]).copy()
@@ -108,7 +162,7 @@ def main(refresh: bool = True) -> None:
     print(f"  panel = {ranked.shape[0]:,} rows | universe with hot adds = "
           f"{len(extended_universe)} stocks")
 
-    print("Step 4/6: walk-forward RF (diagnostics)...")
+    print("Step 5/8: walk-forward RF (diagnostics)...")
     preds_oos, folds = walk_forward_rf(stock_ranked, FEATURE_COLS,
                                        target_col="xret_fwd_1d",
                                        cfg=cfg, verbose=True)
@@ -124,14 +178,14 @@ def main(refresh: bool = True) -> None:
                   .mean(axis=1).sort_values(ascending=True))
     feat_imp.to_csv(cfg.docs_data_dir / "feature_importance.csv", header=["importance"])
 
-    print("Step 5/6: fit full-history model + predict tomorrow...")
+    print("Step 6/8: fit full-history model + predict tomorrow...")
     model = fit_full_model(stock_ranked, FEATURE_COLS, "xret_fwd_1d", cfg)
     latest = predict_latest(model, ranked_for_pred, FEATURE_COLS)
     print(f"  predicted for {latest['date'].iloc[0].date()} -> "
           f"top: {latest.head(3)['ticker'].tolist()} | "
           f"bottom: {latest.tail(3)['ticker'].tolist()}")
 
-    print("Step 6/7: update tracker...")
+    print("Step 7/8: update tracker...")
     history = update_tracker(latest, panel, cfg.docs_data_dir,
                              long_n=cfg.long_n, short_n=cfg.short_n)
     tracker_path = cfg.docs_data_dir / "tracker.csv"
@@ -140,7 +194,7 @@ def main(refresh: bool = True) -> None:
 
     cap = float(cfg.starting_capital)
     cur = getattr(cfg, "currency_prefix", "NT$")
-    print(f"Step 7/7: simulate portfolio ({cur}{cap:,.0f}) + generate today's orders...")
+    print(f"Step 8/8: simulate portfolio ({cur}{cap:,.0f}) + site render...")
     # Cash settlement: SETTLE_DAYS controls the *live* portfolio's mode (the
     # one that gets persisted across daily runs). Backtest replay is rendered
     # in BOTH modes regardless of this env var, so the dashboard can toggle
@@ -326,5 +380,35 @@ def main(refresh: bool = True) -> None:
     print("Done.")
 
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument(
+        "--skip-eod-check",
+        action="store_true",
+        help="Run the full pipeline even if Yahoo's latest daily bar is behind the "
+             "expected completed session (TWSE/NYSE weekday heuristic).",
+    )
+    p.add_argument(
+        "--exit-zero-if-eod-not-ready",
+        action="store_true",
+        help="If Yahoo is still missing the required session, exit 0 without running "
+             "(for scheduled CI that should stay green and commit nothing).",
+    )
+    p.add_argument(
+        "--data-as-of",
+        metavar="YYYY-MM-DD",
+        default=None,
+        help="Clip all OHLCV after this session (overrides env DATA_AS_OF). "
+             "Use to publish as-of e.g. 2026-05-13 while a later session is still open.",
+    )
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    _args = _parse_args()
+    main(
+        refresh=True,
+        skip_eod_check=_args.skip_eod_check,
+        exit_zero_if_eod_not_ready=_args.exit_zero_if_eod_not_ready,
+        data_as_of=_args.data_as_of,
+    )
