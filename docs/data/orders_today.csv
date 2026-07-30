@@ -1,6 +1,8 @@
 action,ticker,shares,limit_price,notional,rationale
-BUY,1303.TW,3,141.5,424.5,INCREASE long position
-BUY,2303.TW,4,102.5,410.0,INCREASE long position
-BUY,2327.TW,1,507.0,507.0,INCREASE long position
-BUY,3037.TW,23,688.0,15824.0,OPEN long position (entered top-N basket)
-SELL,6505.TW,235,74.8,17578.0,CLOSE position (left top-N basket)
+SELL,1303.TW,1,145.0,145.0,REDUCE position
+SELL,2303.TW,9,110.0,990.0,REDUCE position
+BUY,2327.TW,4,456.5,1826.0,INCREASE long position
+SELL,3037.TW,23,716.0,16468.0,CLOSE position (left top-N basket)
+SELL,3443.TW,4,3460.0,13840.0,CLOSE position (left top-N basket)
+BUY,3665.TW,8,1910.0,15280.0,OPEN long position (entered top-N basket)
+BUY,6505.TW,230,71.6,16468.0,OPEN long position (entered top-N basket)
