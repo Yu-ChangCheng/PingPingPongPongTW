@@ -1,4 +1,5 @@
 action,ticker,shares,limit_price,notional,rationale
-BUY,1303.TW,1,225.5,225.5,INCREASE long position
-SELL,2327.TW,3,562.0,1686.0,REDUCE position
-BUY,3037.TW,2,902.0,1804.0,INCREASE long position
+SELL,1303.TW,1,230.5,230.5,REDUCE position
+SELL,2327.TW,1,589.0,589.0,REDUCE position
+BUY,3008.TW,1,6660.0,6660.0,INCREASE long position
+SELL,3037.TW,1,949.0,949.0,REDUCE position
